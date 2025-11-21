@@ -62,7 +62,7 @@ def login():
             # Set session
             session['username'] = user['username']  # auto username = role's username
             session['role'] = user['role']
-            flash("Login successful!", "success")
+            
             return redirect(url_for(f"{user['role']}_dashboard"))  # role-based dashboard redirect
         else:
             flash("Invalid credentials!", "danger")
