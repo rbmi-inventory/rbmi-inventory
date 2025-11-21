@@ -237,7 +237,7 @@
         <table class="table table-bordered" id="ordersTable">
   <thead>
     <tr>
-      <th>ID</th>
+      <th>No</th>
       <th>Vendor</th>
       <th>Item</th>
       <th>Total Qty</th>
@@ -252,7 +252,7 @@
   <tbody>
     {% for o in orders %}
     <tr>
-      <td>{{ o.id }}</td>
+      <td>{{ loop.index }}</td>
       <td>{{ o.vendor_name }}</td>
       <td>{{ o.item_name }}</td>
       <td>{{ o.total_qty }}</td>
