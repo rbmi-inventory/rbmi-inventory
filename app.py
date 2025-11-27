@@ -794,6 +794,129 @@ def export_orders_csv():
     output.headers["Content-Type"] = "text/csv"
     return output
 
+@app.route("/transfer_stock", methods=["GET", "POST"])
+@login_required
+def transfer_stock():
+    conn = get_connection()
+    if not conn:
+        flash("Database error!", "danger")
+        return redirect(url_for("login"))
+
+    cursor = conn.cursor(dictionary=True)
+
+    role = session.get("role")
+
+    # ---------- AUTO FROM/TO LOGIC ----------
+    if role == "mess":
+        transfer_from_default = "mess"
+        transfer_to_default = "canteen"
+        editable = False
+    elif role == "canteen":
+        transfer_from_default = "canteen"
+        transfer_to_default = "mess"
+        editable = False
+    else:
+        # Manager → editable
+        transfer_from_default = "mess"
+        transfer_to_default = "canteen"
+        editable = True
+
+    try:
+        if request.method == "POST":
+
+            # Manager only can change
+            if editable:
+                transfer_from = request.form.get("transfer_from")
+                transfer_to = request.form.get("transfer_to")
+            else:
+                transfer_from = transfer_from_default
+                transfer_to = transfer_to_default
+
+            item_id = request.form["item_id"]
+            qty = float(request.form["quantity"])
+
+            # Fetch item + stocks
+            cursor.execute(
+                """
+                SELECT im.item_id, im.item_name, im.unit,
+                       IFNULL(ms.quantity,0) AS mess_qty,
+                       IFNULL(cs.quantity,0) AS canteen_qty
+                FROM items_master im
+                LEFT JOIN mess_stock ms ON im.item_id = ms.item_id
+                LEFT JOIN canteen_stock cs ON im.item_id = cs.item_id
+                WHERE im.item_id=%s
+                """,
+                (item_id,)
+            )
+            item = cursor.fetchone()
+
+            # STOCK VALIDATION
+            if transfer_from == "mess":
+                if item["mess_qty"] < qty:
+                    flash("Mess does not have enough stock!", "danger")
+                    return redirect(url_for("transfer_stock"))
+            else:
+                if item["canteen_qty"] < qty:
+                    flash("Canteen does not have enough stock!", "danger")
+                    return redirect(url_for("transfer_stock"))
+
+            # DEDUCT
+            if transfer_from == "mess":
+                cursor.execute(
+                    "UPDATE mess_stock SET quantity = quantity - %s WHERE item_id=%s",
+                    (qty, item_id)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE canteen_stock SET quantity = quantity - %s WHERE item_id=%s",
+                    (qty, item_id)
+                )
+
+            # ADD
+            if transfer_to == "mess":
+                cursor.execute(
+                    """
+                    INSERT INTO mess_stock (item_id, quantity)
+                    VALUES (%s, %s)
+                    ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)
+                    """,
+                    (item_id, qty)
+                )
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO canteen_stock (item_id, quantity)
+                    VALUES (%s, %s)
+                    ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)
+                    """,
+                    (item_id, qty)
+                )
+
+            conn.commit()
+
+            flash(
+                f"Transferred {qty} {item['unit']} of {item['item_name']} ({transfer_from} → {transfer_to})",
+                "success",
+            )
+            return redirect(url_for("transfer_stock"))
+
+        # Load items for dropdown
+        cursor.execute("SELECT item_id, item_name, unit FROM items_master ORDER BY item_name ASC")
+        items = cursor.fetchall()
+
+    finally:
+        cursor.close()
+        conn.close()
+
+    return render_template(
+        "transfer_stock.html",
+        items=items,
+        transfer_from_default=transfer_from_default,
+        transfer_to_default=transfer_to_default,
+        editable=editable
+    )
+
+
 
 
 # ================== LOGOUT ==================
