@@ -366,11 +366,12 @@ def mess_dashboard():
         cursor.execute(
             """
             SELECT im.item_name,
-                   IFNULL(ms.quantity,0) AS quantity,
-                   im.unit
-            FROM items_master im
-            LEFT JOIN mess_stock ms ON im.item_id = ms.item_id
-            ORDER BY im.item_name
+            ms.quantity,
+            im.unit
+            FROM mess_stock ms
+            JOIN items_master im ON im.item_id = ms.item_id
+            WHERE ms.quantity > 0
+            ORDER BY im.item_name;
             """
         )
         stock = cursor.fetchall()
@@ -457,10 +458,11 @@ def canteen_dashboard():
         cursor.execute(
             """
             SELECT im.item_name,
-                   IFNULL(cs.quantity,0) AS quantity,
-                   im.unit
-            FROM items_master im
-            LEFT JOIN canteen_stock cs ON im.item_id = cs.item_id
+            cs.quantity,
+            im.unit
+            FROM canteen_stock cs
+            JOIN items_master im ON im.item_id = cs.item_id
+            WHERE cs.quantity > 0
             ORDER BY im.item_name
             """
         )
